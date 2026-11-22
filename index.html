@@ -1,0 +1,1040 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>画像ツール箱 — HEIC変換・圧縮・リサイズ</title>
+<meta name="description" content="HEIC変換・画像圧縮・リサイズ・切り抜きを、ブラウザの中だけで。画像はサーバーに送信されません。">
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#fff; --surface2:#eef1f4; --line:#e4e7ec;
+  --text:#1a1d21; --muted:#667085; --accent:#2563eb; --accent2:#1d4ed8; --accent-soft:#eff4ff;
+  --privacy-bg:#ecfdf3; --privacy-line:#a6f4c5; --privacy-text:#067647;
+  --warn:#b45309;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#101418; --card:#1a1f26; --surface2:#232a33; --line:#2e3642;
+    --text:#f2f4f7; --muted:#98a2b3; --accent:#5b8cff; --accent2:#7aa5ff; --accent-soft:#16233d;
+    --privacy-bg:#052e1b; --privacy-line:#14532d; --privacy-text:#6ce9a6;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+a{color:var(--accent)}
+button,select,input{font:inherit}
+button,select,input[type="number"]{min-height:44px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+main{max-width:900px;margin:0 auto;padding:24px 16px 64px}
+
+/* Header (PDF Tools style) */
+.topbar{display:flex;align-items:flex-start;gap:12px}
+.topbar>div:first-child{flex:1}
+h1{font-size:24px;margin:8px 0 4px}
+.sub{color:var(--muted);margin:0 0 8px}
+.lang-toggle{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;flex-shrink:0;margin-top:10px}
+.lang-toggle button{border:0;background:var(--card);color:var(--muted);padding:7px 14px;cursor:pointer;font-size:14px;min-height:36px}
+.lang-toggle button.active{background:var(--accent);color:#fff}
+.privacy{background:var(--privacy-bg);border:1px solid var(--privacy-line);color:var(--privacy-text);border-radius:10px;padding:10px 14px;font-size:14px;margin:16px 0}
+
+/* Panels & buttons */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+.btn{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;padding:10px 18px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;font-size:15px}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{background:var(--accent2)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-sm{min-height:38px;padding:7px 13px;font-size:13.5px}
+.mini{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:13px;min-height:34px;min-width:38px}
+.mini:hover{border-color:var(--accent);color:var(--accent)}
+.mini.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600;padding:5px 14px}
+.mini.primary:hover{background:var(--accent2)}
+.mini.primary:disabled{opacity:.5;cursor:not-allowed}
+
+/* Dropzone */
+.drop{border:2px dashed var(--line);border-radius:12px;padding:28px 20px;text-align:center;cursor:pointer;color:var(--muted)}
+.drop.drag{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.drop h2{margin:0;font-size:17px;color:var(--text)}
+.drop.drag h2{color:var(--accent)}
+.drop p{margin:6px 0 0;font-size:13.5px}
+.drop .formats{margin-top:12px;display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+.drop .formats span{font-size:11.5px;font-weight:700;background:var(--surface2);border:1px solid var(--line);padding:4px 8px;border-radius:999px;color:var(--text)}
+.drop .drop-btns{margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+
+/* Layout */
+.workspace{display:grid;grid-template-columns:300px 1fr;gap:16px;margin-top:16px;align-items:start}
+@media(max-width:820px){.workspace{grid-template-columns:1fr}}
+.panel h3{margin:0 0 4px;font-size:15px}
+.panel p.desc{margin:0 0 14px;color:var(--muted);font-size:13px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:13.5px;font-weight:600;margin-bottom:6px}
+.field label span{color:var(--muted);font-weight:400}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.seg button{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:8px;padding:10px 6px;font-size:13px;font-weight:600;cursor:pointer;min-height:44px}
+.seg button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.seg3{grid-template-columns:1fr 1fr 1fr}
+input[type="range"]{width:100%;accent-color:var(--accent);min-height:36px}
+select,input[type="number"]{width:100%;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:8px;padding:10px;font-size:15px}
+.range-row{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+.range-row b{color:var(--text)}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.presets button{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:8px;padding:9px 8px;text-align:left;cursor:pointer;min-height:48px}
+.presets button b{display:block;font-size:13px}
+.presets button span{font-size:11.5px;color:var(--muted)}
+.presets button.active{border-color:var(--accent);background:var(--accent-soft)}
+.check{display:flex;gap:10px;align-items:flex-start;background:var(--surface2);border-radius:8px;padding:10px 12px}
+.check input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent);flex-shrink:0}
+.check label{font-size:13px;line-height:1.5;margin:0;font-weight:400}
+.check label b{display:block;font-size:13.5px}
+
+/* File list */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;justify-content:space-between;margin-bottom:12px}
+.toolbar-left{font-size:13px;color:var(--muted)}
+.summary{background:var(--accent-soft);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px}
+.summary div{font-size:13px;color:var(--muted)}
+.summary b{font-size:16px;color:var(--text)}
+.empty{border:1.5px dashed var(--line);border-radius:12px;padding:28px 16px;text-align:center;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+@media(max-width:520px){.grid{grid-template-columns:1fr 1fr}}
+@media(max-width:380px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.thumb{aspect-ratio:4/3;background:var(--surface2);display:grid;place-items:center;overflow:hidden;position:relative}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .tag{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.72);color:#fff;font-size:11px;font-weight:700;padding:4px 7px;border-radius:999px}
+.thumb .sav{position:absolute;right:8px;top:8px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;padding:4px 7px;border-radius:999px}
+.card-body{padding:12px}
+.fname{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{font-size:12px;color:var(--muted);line-height:1.6;margin-top:2px}
+.meta b{color:var(--text)}
+.progress{height:6px;background:var(--surface2);border-radius:999px;overflow:hidden;margin-top:8px}
+.progress i{display:block;height:100%;background:var(--accent);width:0%}
+.card-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center}
+
+/* Sections */
+.section{padding:36px 0 8px}
+.section h2{font-size:20px;margin:0 0 6px}
+.section p.sub2{color:var(--muted);margin:0 0 16px;font-size:14.5px;max-width:640px}
+.tools{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:820px){.tools{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.tools{grid-template-columns:1fr}}
+.tool{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+.tool .ic{font-size:22px;margin-bottom:8px}
+.tool h3{margin:0 0 6px;font-size:15px}
+.tool p{margin:0;color:var(--muted);font-size:13.5px}
+.tool ul{margin:10px 0 0;padding-left:18px;color:var(--muted);font-size:13px}
+.usecases{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media(max-width:640px){.usecases{grid-template-columns:1fr}}
+.uc{display:flex;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.uc .n{width:36px;height:36px;border-radius:50%;background:var(--text);color:var(--bg);display:grid;place-items:center;font-weight:700;flex-shrink:0;font-size:14px}
+.uc h3{margin:2px 0 4px;font-size:14.5px}
+.uc p{margin:0;color:var(--muted);font-size:13.5px}
+.uc button{margin-top:8px}
+.table-wrap{overflow-x:auto;border-radius:14px}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;font-size:13.5px}
+th,td{padding:11px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--surface2);font-size:12px}
+tr:last-child td{border-bottom:none}
+.faq{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
+.faq details{border-bottom:1px solid var(--line)}
+.faq details:last-child{border-bottom:none}
+.faq summary{padding:14px 16px;font-weight:700;cursor:pointer;min-height:48px;display:flex;align-items:center}
+.faq p{margin:0;padding:0 16px 14px;color:var(--muted);font-size:14px}
+footer{color:var(--muted);font-size:13px;margin-top:40px}
+.copyright{color:var(--muted);font-size:13px;margin-top:10px}
+.copyright a{color:var(--accent);text-decoration:none}
+.copyright a:hover{text-decoration:underline}
+.toast{position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:20px;background:#111;color:#fff;padding:11px 16px;border-radius:999px;font-size:13.5px;font-weight:700;opacity:0;pointer-events:none;transition:.2s;z-index:50;max-width:calc(100vw - 32px);text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Crop modal */
+.crop-overlay{position:fixed;inset:0;background:rgba(10,12,11,.72);z-index:60;display:flex;align-items:center;justify-content:center;padding:16px}
+.crop-overlay[hidden]{display:none}
+.crop-panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;max-width:720px;width:100%;max-height:92vh;overflow:auto}
+.crop-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
+.crop-head h3{margin:0;font-size:16px}
+.crop-out{font-size:13px;color:var(--accent);font-weight:700;white-space:nowrap}
+.crop-aspects{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.crop-aspects button{border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;min-height:40px}
+.crop-aspects button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.crop-stage{position:relative;margin:0 auto;width:fit-content;max-width:100%;line-height:0;user-select:none;-webkit-user-select:none}
+.crop-stage img{max-width:100%;max-height:54vh;display:block;border-radius:6px}
+.crop-box{position:absolute;border:2px solid var(--accent);box-shadow:0 0 0 9999px rgba(0,0,0,.52);cursor:move;touch-action:none;z-index:2}
+.crop-box::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(to right,transparent calc(33.333% - .5px),rgba(255,255,255,.5) 33.333%,transparent calc(33.333% + .5px),transparent calc(66.666% - .5px),rgba(255,255,255,.5) 66.666%,transparent calc(66.666% + .5px)),linear-gradient(to bottom,transparent calc(33.333% - .5px),rgba(255,255,255,.5) 33.333%,transparent calc(33.333% + .5px),transparent calc(66.666% - .5px),rgba(255,255,255,.5) 66.666%,transparent calc(66.666% + .5px))}
+.crop-h{position:absolute;width:22px;height:22px;background:var(--accent);border:2.5px solid #fff;border-radius:6px;transform:translate(-50%,-50%);z-index:3;touch-action:none}
+.crop-h[data-h="nw"]{left:0;top:0;cursor:nwse-resize}
+.crop-h[data-h="ne"]{left:100%;top:0;cursor:nesw-resize}
+.crop-h[data-h="sw"]{left:0;top:100%;cursor:nesw-resize}
+.crop-h[data-h="se"]{left:100%;top:100%;cursor:nwse-resize}
+.crop-hint{color:var(--muted);font-size:12.5px;margin:10px 0 0;line-height:1.5}
+.crop-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center}
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <div>
+      <h1 data-i18n="appName">画像ツール箱</h1>
+      <p class="sub" data-i18n="tagline">HEIC変換 ・ 圧縮 ・ リサイズ ・ 切り抜き — すべてブラウザの中で</p>
+    </div>
+    <div class="lang-toggle" role="group" aria-label="Language">
+      <button type="button" id="langEn">EN</button>
+      <button type="button" id="langJa">日本語</button>
+      <button type="button" id="langTh">ไทย</button>
+    </div>
+  </div>
+  <div class="privacy" data-i18n="privacy">🔒 画像はサーバーに送信されません。すべての処理はあなたのブラウザの中だけで完結します。</div>
+
+  <!-- Dropzone -->
+  <section class="panel">
+    <div class="drop" id="dropZone" tabindex="0" role="button" aria-label="Add images">
+      <h2 data-i18n="dropTitle">ここに画像をドラッグ＆ドロップ</h2>
+      <p data-i18n="dropDesc">クリックして選択、または Ctrl+V で貼り付けもできます。画像はこのブラウザの中だけで処理されます。</p>
+      <div class="formats"><span>HEIC → JPG</span><span data-i18n="chipCompress">圧縮</span><span data-i18n="chipResize">リサイズ</span><span>WebP</span><span data-i18n="chipRotate">回転</span><span data-i18n="chipCrop">切り抜き Crop</span><span data-i18n="chipExif">EXIF削除</span></div>
+      <div class="drop-btns">
+        <button class="btn btn-primary" id="pickBtn" data-i18n="pickBtn">＋ 画像を選ぶ</button>
+        <button class="btn" id="demoBtn" data-i18n="demoBtn">サンプルで試す</button>
+      </div>
+      <input type="file" id="fileInput" accept="image/*,.heic,.heif" multiple hidden>
+    </div>
+  </section>
+
+  <!-- Workspace -->
+  <div class="workspace">
+    <!-- Settings -->
+    <aside class="panel" aria-label="Settings">
+      <h3 data-i18n="settingsTitle">変換設定</h3>
+      <p class="desc" data-i18n="settingsDesc">設定を変えると、追加済みの画像にすぐ反映されます。</p>
+
+      <div class="field">
+        <label><span data-i18n="presetLabel" style="color:var(--text);font-weight:600">用途プリセット</span> <span data-i18n="presetLabelSub">— ワンタップで最適化</span></label>
+        <div class="presets" id="presets">
+          <button data-preset="gov"><b data-i18n="presetGov">役所・提出用</b><span data-i18n="presetGovSub">JPG / 長辺 1920px</span></button>
+          <button data-preset="mail"><b data-i18n="presetMail">メール添付</b><span data-i18n="presetMailSub">JPG / 2MB目安・1280px</span></button>
+          <button data-preset="sns"><b data-i18n="presetSns">SNS・ブログ</b><span data-i18n="presetSnsSub">WebP / 1280px・軽量</span></button>
+          <button data-preset="orig" class="active"><b data-i18n="presetOrig">そのまま変換</b><span data-i18n="presetOrigSub">サイズ変更なし</span></button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label data-i18n="formatLabel">出力形式</label>
+        <div class="seg seg3" id="formatSeg">
+          <button data-fmt="image/jpeg" class="active">JPG</button>
+          <button data-fmt="image/png">PNG</button>
+          <button data-fmt="image/webp">WebP</button>
+        </div>
+        <p style="margin:6px 0 0;font-size:12px;color:var(--muted)" data-i18n="formatNote">HEICは自動で選択形式に変換。PNGは透過を保持、JPGは最も互換性が高い形式です。</p>
+      </div>
+
+      <div class="field">
+        <label><span data-i18n="qualityLabel" style="color:var(--text);font-weight:600">画質</span> <span data-i18n="qualitySub">— JPG / WebP の圧縮率</span></label>
+        <div class="range-row"><span data-i18n="qLight">軽さ重視</span><b id="qLabel">90%</b><span data-i18n="qHigh">高画質</span></div>
+        <input type="range" id="quality" min="30" max="100" value="90" step="1">
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" data-q="60" style="flex:1" data-i18n="q60">60% 軽量</button>
+          <button class="btn btn-sm" data-q="85" style="flex:1" data-i18n="q85">85% 推奨</button>
+          <button class="btn btn-sm" data-q="95" style="flex:1" data-i18n="q95">95% 高画質</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="resizeSel" data-i18n="resizeLabel">リサイズ（長辺）</label>
+        <select id="resizeSel">
+          <option value="0" selected data-i18n="rsNone">変更しない（元のサイズ）</option>
+          <option value="3840" data-i18n="rs3840">3840px — 4K</option>
+          <option value="1920" data-i18n="rs1920">1920px — フルHD / 提出用</option>
+          <option value="1280" data-i18n="rs1280">1280px — Web・SNS推奨</option>
+          <option value="800" data-i18n="rs800">800px — サムネイル・軽量</option>
+          <option value="400" data-i18n="rs400">400px — アイコン用</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="maxKb" data-i18n="maxKbLabel">目標サイズ（任意）</label>
+        <select id="maxKb">
+          <option value="0" data-i18n="kbNone">指定なし</option>
+          <option value="200" data-i18n="kb200">200KB 以下に収める</option>
+          <option value="500" data-i18n="kb500">500KB 以下に収める</option>
+          <option value="1024" data-i18n="kb1m">1MB 以下に収める</option>
+          <option value="2048" data-i18n="kb2m">2MB 以下に収める</option>
+        </select>
+        <p style="margin:6px 0 0;font-size:12px;color:var(--muted)" data-i18n="maxKbNote">指定すると画質を自動調整して目標以下を目指します（JPG / WebPのみ）。</p>
+      </div>
+
+      <div class="field" style="margin-bottom:0">
+        <div class="check">
+          <input type="checkbox" id="stripExif" checked>
+          <label for="stripExif"><b data-i18n="stripT">位置情報（EXIF）を削除する</b><span data-i18n="stripD">撮影場所・日時などのメタデータを除去してから保存します。共有時のプライバシー保護に推奨。</span></label>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Files -->
+    <section class="panel" aria-label="Images">
+      <div class="toolbar">
+        <div>
+          <h3 style="margin:0" data-i18n="filesTitle">画像一覧</h3>
+          <div class="toolbar-left" id="countLabel">まだ画像がありません</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-sm" id="clearBtn" disabled data-i18n="clearBtn">すべて削除</button>
+          <button class="btn btn-sm btn-primary" id="dlAllBtn" disabled data-i18n="dlAllBtn">⬇ まとめて保存</button>
+        </div>
+      </div>
+
+      <div class="summary" id="summary" style="display:none">
+        <div><span data-i18n="sumTotal">合計</span> <b id="sumCount">0枚</b></div>
+        <div><span data-i18n="sumBefore">変換前</span> <b id="sumBefore">0 KB</b></div>
+        <div><span data-i18n="sumAfter">変換後</span> <b id="sumAfter">—</b></div>
+        <div><span data-i18n="sumSaved">削減</span> <b id="sumSave" style="color:var(--accent)">—</b></div>
+      </div>
+
+      <div class="empty" id="emptyState">
+        <div style="font-size:28px;margin-bottom:6px">🖼️</div>
+        <b data-i18n="emptyTitle">画像を追加すると、ここにプレビューが出ます</b>
+        <p style="margin:6px 0 0;font-size:13.5px" data-i18n-html="emptyDesc">HEICのままではWindowsで開けない写真も、追加するだけでJPGに変換できます。<br>まずは上のエリアに iPhone の写真を1枚入れてみてください。</p>
+      </div>
+
+      <div class="grid" id="grid"></div>
+
+      <p style="margin:14px 0 0;font-size:12.5px;color:var(--muted)" data-i18n="zipNote">💡 まとめて保存は ZIP でダウンロードします（2枚以上のとき）。1枚のときはそのまま画像ファイルが保存されます。処理はすべて端末内で完結し、画像が外部に送信されることはありません。</p>
+    </section>
+  </div>
+
+  <!-- Tools deep dive -->
+  <section class="section">
+    <h2 data-i18n="toolsH">掘り下げ：6つの道具</h2>
+    <p class="sub2" data-i18n="toolsSub">「画像ツール」と一言で言っても困りごとは別々です。このツール箱は、よくある6つの作業を1つの画面にまとめています。</p>
+    <div class="tools">
+      <article class="tool"><div class="ic">📱</div><h3 data-i18n="tool1T">HEIC → JPG 変換</h3><p data-i18n="tool1P">iPhoneの標準形式HEICは、Windows・役所・古いシステムで開けないことが多い定番トラブル。</p><ul><li data-i18n="tool1L1">HEIC / HEIF に対応</li><li data-i18n="tool1L2">まとめて一括変換</li><li data-i18n="tool1L3">向き（回転情報）も自動補正</li></ul></article>
+      <article class="tool"><div class="ic">🗜️</div><h3 data-i18n="tool2T">画像圧縮</h3><p data-i18n="tool2P">画質スライダーと「目標KB以下」で、アップロード制限に合わせます。</p><ul><li data-i18n="tool2L1">画質 30〜100% を調整</li><li data-i18n="tool2L2">200KB / 500KB / 1MB / 2MB 目標</li><li data-i18n="tool2L3">変換前後のサイズをその場で比較</li></ul></article>
+      <article class="tool"><div class="ic">📐</div><h3 data-i18n="tool3T">リサイズ・切り抜き（Crop）</h3><p data-i18n="tool3P">長辺を指定するだけ。アスペクト比は自動で維持され、引き伸ばしはしません。不要な部分は切り抜きで取り除けます。</p><ul><li data-i18n="tool3L1">3840 / 1920 / 1280 / 800 / 400px</li><li data-i18n="tool3L2">カードの「✂」からドラッグで範囲指定</li><li data-i18n="tool3L3">1:1 / 4:3 / 16:9 など比率プリセット付き</li><li data-i18n="tool3L4">元より大きくはしません</li></ul></article>
+      <article class="tool"><div class="ic">🔄</div><h3 data-i18n="tool4T">形式変換 JPG / PNG / WebP</h3><p data-i18n="tool4P">用途で使い分け。WebPはJPGより軽く、PNGは透過と文字の鮮明さが強み。</p><ul><li data-i18n="tool4L1">JPG：互換性No.1・提出用</li><li data-i18n="tool4L2">PNG：透過・ロゴ・スクショ</li><li data-i18n="tool4L3">WebP：Web掲載で最軽量</li></ul></article>
+      <article class="tool"><div class="ic">🔃</div><h3 data-i18n="tool5T">回転・補正</h3><p data-i18n="tool5P">横向きになってしまった写真は、カードの回転ボタンで90°ずつ直してから保存。</p><ul><li data-i18n="tool5L1">1枚ずつ回転OK</li><li data-i18n="tool5L2">EXIFの向きも考慮</li><li data-i18n="tool5L3">再圧縮せずにプレビュー反映</li></ul></article>
+      <article class="tool"><div class="ic">🛡️</div><h3 data-i18n="tool6T">EXIF・位置情報の削除</h3><p data-i18n="tool6P">写真には撮影場所のGPSが入っていることがあります。Canvasで再描画することで自動除去。</p><ul><li data-i18n="tool6L1">GPS・機種・日時を除去</li><li data-i18n="tool6L2">SNS・フリマ出品前に安心</li><li data-i18n="tool6L3">オン／オフ切り替え可能</li></ul></article>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2 data-i18n="ucH">こんなときに</h2>
+    <p class="sub2" data-i18n="ucSub">プリセットを選ぶだけで、その用途に合った設定になります。</p>
+    <div class="usecases">
+      <div class="uc"><div class="n">1</div><div><h3 data-i18n="uc1T">役所・ビザ・応募書類にアップロードしたい</h3><p data-i18n="uc1P">「JPGのみ・2MBまで」といった制限に。長辺1920px＋JPGでほぼ確実に通ります。</p><button class="btn btn-sm" data-apply="gov" data-i18n="applyBtn">この設定を使う →</button></div></div>
+      <div class="uc"><div class="n">2</div><div><h3 data-i18n="uc2T">iPhone写真をWindowsの家族に送りたい</h3><p data-i18n="uc2P">HEICのままだと相手が開けません。JPGに変換してZIPでまとめて渡せます。</p><button class="btn btn-sm" data-apply="orig" data-i18n="applyBtn">この設定を使う →</button></div></div>
+      <div class="uc"><div class="n">3</div><div><h3 data-i18n="uc3T">ブログ・サイトを軽くしたい</h3><p data-i18n="uc3P">WebP＋1280px＋画質80%前後で、見た目をほぼ保ったまま容量を大幅削減。</p><button class="btn btn-sm" data-apply="sns" data-i18n="applyBtn">この設定を使う →</button></div></div>
+      <div class="uc"><div class="n">4</div><div><h3 data-i18n="uc4T">フリマ・SNS投稿前に位置情報を消したい</h3><p data-i18n="uc4P">自宅で撮った写真のGPS除去が目的。EXIF削除オン＋そのまま変換でOK。</p><button class="btn btn-sm" data-apply="orig" data-i18n="applyBtn">この設定を使う →</button></div></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2 data-i18n="tableH">形式の早見表</h2>
+    <p class="sub2" data-i18n="tableSub">迷ったらJPG。軽さならWebP、透過や文字のくっきり感ならPNGです。</p>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th data-i18n="thFormat">形式</th><th data-i18n="thUse">向いている用途</th><th data-i18n="thSize">容量</th><th data-i18n="thNote">注意点</th></tr></thead>
+      <tbody>
+        <tr><td><b>JPG</b></td><td data-i18n="rowJpgUse">写真全般、提出書類、メール添付</td><td data-i18n="rowJpgSize">小さい</td><td data-i18n="rowJpgNote">透過不可。繰り返し保存で劣化</td></tr>
+        <tr><td><b>PNG</b></td><td data-i18n="rowPngUse">スクリーンショット、ロゴ、透過画像</td><td data-i18n="rowPngSize">大きい</td><td data-i18n="rowPngNote">写真だと容量が膨らみがち</td></tr>
+        <tr><td><b>WebP</b></td><td data-i18n="rowWebpUse">Webサイト、ブログ、SNS</td><td data-i18n="rowWebpSize">最も小さい</td><td data-i18n="rowWebpNote">古いシステムでは開けない場合あり</td></tr>
+        <tr><td><b>HEIC</b></td><td data-i18n="rowHeicUse">iPhone内の保存</td><td data-i18n="rowHeicSize">小さい</td><td data-i18n="rowHeicNote">Windows・Web提出では非対応が多い → JPGへ</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2 data-i18n="faqH">よくある質問</h2>
+    <div class="faq">
+      <details><summary data-i18n="faq1Q">画像はサーバーに送られますか？</summary><p data-i18n="faq1A">いいえ。変換・圧縮・リサイズはすべてこのページのJavaScriptとCanvasで処理します。HEIC変換ライブラリもブラウザ内で動作するため、画像ファイル自体が外部に送信されることはありません。</p></details>
+      <details><summary data-i18n="faq2Q">HEICが変換できないときは？</summary><p data-i18n="faq2A">一部のAndroid HEIFや、破損したファイルでは失敗することがあります。その場合は元の形式のまま表示されます。SafariではHEICを標準で読み込めるため、ブラウザを変えると成功する場合があります。</p></details>
+      <details><summary data-i18n="faq3Q">画質はどれくらいがおすすめ？</summary><p data-i18n="faq3A">写真は85%がバランス良好です。提出書類は90〜95%、Web掲載なら75〜85%で十分なことが多く、容量を大きく減らせます。</p></details>
+      <details><summary data-i18n="faq4Q">まとめて保存（ZIP）の中身は？</summary><p data-i18n-html="faq4A">変換後の画像を、元のファイル名＋形式でまとめたZIPです。例：<span class="mono">IMG_1234.heic → IMG_1234.jpg</span></p></details>
+      <details><summary data-i18n="faq5Q">切り抜き（Crop）はどうやりますか？</summary><p data-i18n="faq5A">各画像カードの「✂」ボタンを押すと切り抜き画面が開きます。枠をドラッグして位置と大きさを決め、「この範囲で切り抜く」を押してください。1:1や16:9などの比率プリセットも選べます。切り抜き後にリサイズ・回転・圧縮が適用されます。</p></details>
+    </div>
+  </section>
+
+  <footer data-i18n="footerNote">画像ツール箱 — ブラウザ完結ツール集 ／ 姉妹ツール：PDFツール箱（pdf.kspheres.com）</footer>
+  <div class="copyright">© 2026 Koichi Uemura · <span data-i18n="mitText">MITライセンスで公開しています</span></div>
+</main>
+
+<!-- Crop editor -->
+<div class="crop-overlay" id="cropOverlay" hidden>
+  <div class="crop-panel" role="dialog" aria-modal="true" aria-label="Crop">
+    <div class="crop-head">
+      <h3 data-i18n="cropTitle">切り抜き（Crop）</h3>
+      <span class="crop-out mono" id="cropOutSize"></span>
+    </div>
+    <div class="crop-aspects" id="cropAspects" role="group" aria-label="Aspect ratio">
+      <button data-ar="0" class="active" data-i18n="arFree">自由</button>
+      <button data-ar="1">1:1</button>
+      <button data-ar="1.3333">4:3</button>
+      <button data-ar="1.5">3:2</button>
+      <button data-ar="1.7778">16:9</button>
+      <button data-ar="0.5625">9:16</button>
+      <button data-ar="0.75">3:4</button>
+    </div>
+    <div class="crop-stage" id="cropStage">
+      <img id="cropImg" alt="">
+      <div class="crop-box" id="cropBox">
+        <span class="crop-h" data-h="nw"></span>
+        <span class="crop-h" data-h="ne"></span>
+        <span class="crop-h" data-h="sw"></span>
+        <span class="crop-h" data-h="se"></span>
+      </div>
+    </div>
+    <p class="crop-hint" data-i18n="cropHint">枠の中をドラッグで移動、四隅のハンドルをドラッグでサイズ変更できます。切り抜きは元の解像度で適用され、その後にリサイズ・回転・圧縮が行われます。</p>
+    <div class="crop-actions">
+      <button class="btn" id="cropReset" data-i18n="cropReset">全体に戻す</button>
+      <span style="flex:1"></span>
+      <button class="btn" id="cropCancel" data-i18n="cropCancel">キャンセル</button>
+      <button class="btn btn-primary" id="cropApply" data-i18n="cropApply">この範囲で切り抜く</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   i18n: all user-facing strings live in this dictionary
+   (same approach as PDF Tools). Add a locale object with the
+   same keys to add a language — no other code changes.
+   ============================================================ */
+var I18N = {
+  en: {
+    title: 'Image Toolbox — HEIC Convert, Compress, Resize & Crop',
+    appName: 'Image Toolbox',
+    tagline: 'HEIC Convert · Compress · Resize · Crop — all in your browser',
+    privacy: '🔒 Your images are never uploaded. Everything runs locally in your browser.',
+    dropTitle: 'Drag & drop images here',
+    dropDesc: 'Click to choose, or paste with Ctrl+V. Images are processed only inside this browser.',
+    chipCompress: 'Compress', chipResize: 'Resize', chipRotate: 'Rotate', chipCrop: 'Crop', chipExif: 'Remove EXIF',
+    pickBtn: '＋ Choose images', demoBtn: 'Try a sample',
+    settingsTitle: 'Settings', settingsDesc: 'Changes apply to images you have already added, right away.',
+    presetLabel: 'Use-case presets', presetLabelSub: '— one tap to optimize',
+    presetGov: 'Forms & submissions', presetGovSub: 'JPG / max 1920px',
+    presetMail: 'Email attachment', presetMailSub: 'JPG / ~2MB, 1280px',
+    presetSns: 'SNS / blog', presetSnsSub: 'WebP / 1280px, light',
+    presetOrig: 'Convert as-is', presetOrigSub: 'No resizing',
+    formatLabel: 'Output format',
+    formatNote: 'HEIC is converted to the selected format automatically. PNG keeps transparency; JPG is the most compatible.',
+    qualityLabel: 'Quality', qualitySub: '— compression for JPG / WebP',
+    qLight: 'Smaller', qHigh: 'Higher quality',
+    q60: '60% Light', q85: '85% Recommended', q95: '95% High quality',
+    resizeLabel: 'Resize (longest side)',
+    rsNone: 'No change (original size)', rs3840: '3840px — 4K', rs1920: '1920px — Full HD / forms',
+    rs1280: '1280px — Web / SNS', rs800: '800px — Thumbnails, light', rs400: '400px — Icons',
+    maxKbLabel: 'Target size (optional)',
+    kbNone: 'No target', kb200: 'Fit within 200 KB', kb500: 'Fit within 500 KB', kb1m: 'Fit within 1 MB', kb2m: 'Fit within 2 MB',
+    maxKbNote: 'Quality is adjusted automatically to fit the target (JPG / WebP only).',
+    stripT: 'Remove location data (EXIF)',
+    stripD: 'Strips GPS, timestamps and other metadata before saving. Recommended for privacy when sharing.',
+    filesTitle: 'Images', clearBtn: 'Clear all', dlAllBtn: '⬇ Download all',
+    sumTotal: 'Total', sumBefore: 'Before', sumAfter: 'After', sumSaved: 'Saved',
+    emptyTitle: 'Previews appear here once you add images',
+    emptyDesc: 'Even HEIC photos that Windows cannot open become JPG just by adding them.<br>Start by dropping one iPhone photo into the area above.',
+    zipNote: '💡 Download all saves a ZIP (with 2 or more images). A single image downloads as-is. Everything is processed on your device — images are never sent anywhere.',
+    toolsH: 'Deep dive: six tools',
+    toolsSub: 'Image problems come in different shapes. This toolbox brings six common jobs onto one screen.',
+    tool1T: 'HEIC → JPG', tool1P: 'HEIC, the iPhone default, often will not open on Windows, government sites or older systems.',
+    tool1L1: 'HEIC / HEIF supported', tool1L2: 'Batch conversion', tool1L3: 'Orientation auto-corrected',
+    tool2T: 'Compression', tool2P: 'Use the quality slider and a target size to meet upload limits.',
+    tool2L1: 'Quality 30–100%', tool2L2: 'Targets: 200KB / 500KB / 1MB / 2MB', tool2L3: 'Compare before / after sizes instantly',
+    tool3T: 'Resize & Crop', tool3P: 'Just set the longest side — aspect ratio is kept and images are never enlarged. Trim away what you do not need with crop.',
+    tool3L1: '3840 / 1920 / 1280 / 800 / 400px', tool3L2: 'Drag to select the area from the ✂ button', tool3L3: 'Ratio presets: 1:1 / 4:3 / 16:9 and more', tool3L4: 'Never enlarges beyond the original',
+    tool4T: 'Convert JPG / PNG / WebP', tool4P: 'Pick by purpose. WebP is lighter than JPG; PNG keeps transparency and crisp text.',
+    tool4L1: 'JPG: most compatible, for submissions', tool4L2: 'PNG: transparency, logos, screenshots', tool4L3: 'WebP: lightest for the web',
+    tool5T: 'Rotate & fix', tool5P: 'Sideways photo? Fix it in 90° steps with the rotate button on each card before saving.',
+    tool5L1: 'Rotate one image at a time', tool5L2: 'EXIF orientation respected', tool5L3: 'Preview updates without re-compressing',
+    tool6T: 'Remove EXIF / location', tool6P: 'Photos can carry GPS data. Re-drawing through Canvas strips it automatically.',
+    tool6L1: 'Removes GPS, device and timestamps', tool6L2: 'Safer before SNS or marketplace posts', tool6L3: 'Can be toggled on / off',
+    ucH: 'When to use it', ucSub: 'Pick a preset and the settings match the job.',
+    uc1T: 'Upload to a government form, visa or application', uc1P: 'For “JPG only, up to 2MB” limits. Longest side 1920px + JPG passes almost anywhere.',
+    uc2T: 'Send iPhone photos to family on Windows', uc2P: 'HEIC will not open for them. Convert to JPG and hand over one ZIP.',
+    uc3T: 'Make a blog or site lighter', uc3P: 'WebP + 1280px + around 80% quality cuts size a lot while looking nearly identical.',
+    uc4T: 'Strip location before marketplace / SNS posts', uc4P: 'Remove GPS from photos taken at home. EXIF removal on + convert as-is is enough.',
+    applyBtn: 'Use these settings →',
+    tableH: 'Format cheat sheet', tableSub: 'When in doubt, JPG. For lightness WebP; for transparency and crisp text, PNG.',
+    thFormat: 'Format', thUse: 'Best for', thSize: 'Size', thNote: 'Watch out',
+    rowJpgUse: 'Photos, submissions, email', rowJpgSize: 'Small', rowJpgNote: 'No transparency. Degrades with repeated saves',
+    rowPngUse: 'Screenshots, logos, transparency', rowPngSize: 'Large', rowPngNote: 'Photos get heavy',
+    rowWebpUse: 'Websites, blogs, SNS', rowWebpSize: 'Smallest', rowWebpNote: 'May not open on older systems',
+    rowHeicUse: 'Storage on iPhone', rowHeicSize: 'Small', rowHeicNote: 'Often unsupported on Windows / web forms → convert to JPG',
+    faqH: 'FAQ',
+    faq1Q: 'Are my images sent to a server?', faq1A: 'No. Conversion, compression and resizing all run in this page with JavaScript and Canvas. The HEIC library also runs in the browser, so image files themselves are never sent anywhere.',
+    faq2Q: 'What if a HEIC file will not convert?', faq2A: 'Some Android HEIF files or damaged files can fail; they are then shown in their original format. Safari can read HEIC natively, so switching browsers may help.',
+    faq3Q: 'What quality should I use?', faq3A: '85% is a good balance for photos. Use 90–95% for submissions, and 75–85% is usually plenty for the web while cutting size a lot.',
+    faq4Q: 'What is inside the ZIP?', faq4A: 'The converted images, named after the originals with the new format. Example: <span class="mono">IMG_1234.heic → IMG_1234.jpg</span>',
+    faq5Q: 'How do I crop?', faq5A: 'Press the ✂ button on an image card to open the crop screen. Drag the frame to position and size it, then press “Crop to this area”. Ratio presets like 1:1 and 16:9 are available. Resize, rotation and compression are applied after cropping.',
+    footerNote: 'Image Toolbox — a browser-only toolset / Sister tool: PDF Tools (pdf.kspheres.com)',
+    mitText: 'Released under the MIT License',
+    cropTitle: 'Crop', arFree: 'Free',
+    cropHint: 'Drag inside the frame to move it; drag the corner handles to resize. The crop is applied at full resolution, before resize, rotation and compression.',
+    cropReset: 'Reset to full', cropCancel: 'Cancel', cropApply: 'Crop to this area',
+    countNone: 'No images yet',
+    countN: function(n){ return n===1 ? '1 image' : n+' images'; },
+    sumCountText: function(n,done){ return (n===1?'1 file':n+' files') + (done<n ? ' ('+done+' done)' : ''); },
+    sumSaveText: function(pct){ return pct+'% smaller'; },
+    loading: 'Loading…', processing: 'Processing…',
+    metaBefore: 'Original', metaAfter: 'Result',
+    croppedTag: '✂ Cropped', cappedTag: '(adjusted to target size)',
+    loadFailTitle: '⚠ Could not load this image', loadFailSub: 'Please check the file format',
+    loadError: 'Error: failed to load',
+    saveBtn: 'Save', rotateLabel: 'Rotate 90°', cropLabel: 'Crop', removeLabel: 'Remove',
+    toastSample: 'Sample image added', toastNoImages: 'No image files found',
+    toastMax: 'Up to 50 images at a time', toastCleared: 'All images cleared',
+    toastSaved: 'Saved', toastZipMaking: 'Creating ZIP…',
+    toastZipSaved: function(n){ return 'Saved '+n+' images as ZIP'; },
+    toastPreset: function(name){ return 'Preset “'+name+'” applied'; },
+    toastCropApplied: 'Crop applied', toastCropReset: 'Back to the full image',
+    demoSub: '1600 × 1100 • generated for demo'
+  },
+  ja: {
+    title: '画像ツール箱 — HEIC変換・圧縮・リサイズ・切り抜き',
+    appName: '画像ツール箱',
+    tagline: 'HEIC変換 ・ 圧縮 ・ リサイズ ・ 切り抜き — すべてブラウザの中で',
+    privacy: '🔒 画像はサーバーに送信されません。すべての処理はあなたのブラウザの中だけで完結します。',
+    dropTitle: 'ここに画像をドラッグ＆ドロップ',
+    dropDesc: 'クリックして選択、または Ctrl+V で貼り付けもできます。画像はこのブラウザの中だけで処理されます。',
+    chipCompress: '圧縮', chipResize: 'リサイズ', chipRotate: '回転', chipCrop: '切り抜き Crop', chipExif: 'EXIF削除',
+    pickBtn: '＋ 画像を選ぶ', demoBtn: 'サンプルで試す',
+    settingsTitle: '変換設定', settingsDesc: '設定を変えると、追加済みの画像にすぐ反映されます。',
+    presetLabel: '用途プリセット', presetLabelSub: '— ワンタップで最適化',
+    presetGov: '役所・提出用', presetGovSub: 'JPG / 長辺 1920px',
+    presetMail: 'メール添付', presetMailSub: 'JPG / 2MB目安・1280px',
+    presetSns: 'SNS・ブログ', presetSnsSub: 'WebP / 1280px・軽量',
+    presetOrig: 'そのまま変換', presetOrigSub: 'サイズ変更なし',
+    formatLabel: '出力形式',
+    formatNote: 'HEICは自動で選択形式に変換。PNGは透過を保持、JPGは最も互換性が高い形式です。',
+    qualityLabel: '画質', qualitySub: '— JPG / WebP の圧縮率',
+    qLight: '軽さ重視', qHigh: '高画質',
+    q60: '60% 軽量', q85: '85% 推奨', q95: '95% 高画質',
+    resizeLabel: 'リサイズ（長辺）',
+    rsNone: '変更しない（元のサイズ）', rs3840: '3840px — 4K', rs1920: '1920px — フルHD / 提出用',
+    rs1280: '1280px — Web・SNS推奨', rs800: '800px — サムネイル・軽量', rs400: '400px — アイコン用',
+    maxKbLabel: '目標サイズ（任意）',
+    kbNone: '指定なし', kb200: '200KB 以下に収める', kb500: '500KB 以下に収める', kb1m: '1MB 以下に収める', kb2m: '2MB 以下に収める',
+    maxKbNote: '指定すると画質を自動調整して目標以下を目指します（JPG / WebPのみ）。',
+    stripT: '位置情報（EXIF）を削除する',
+    stripD: '撮影場所・日時などのメタデータを除去してから保存します。共有時のプライバシー保護に推奨。',
+    filesTitle: '画像一覧', clearBtn: 'すべて削除', dlAllBtn: '⬇ まとめて保存',
+    sumTotal: '合計', sumBefore: '変換前', sumAfter: '変換後', sumSaved: '削減',
+    emptyTitle: '画像を追加すると、ここにプレビューが出ます',
+    emptyDesc: 'HEICのままではWindowsで開けない写真も、追加するだけでJPGに変換できます。<br>まずは上のエリアに iPhone の写真を1枚入れてみてください。',
+    zipNote: '💡 まとめて保存は ZIP でダウンロードします（2枚以上のとき）。1枚のときはそのまま画像ファイルが保存されます。処理はすべて端末内で完結し、画像が外部に送信されることはありません。',
+    toolsH: '掘り下げ：6つの道具',
+    toolsSub: '「画像ツール」と一言で言っても困りごとは別々です。このツール箱は、よくある6つの作業を1つの画面にまとめています。',
+    tool1T: 'HEIC → JPG 変換', tool1P: 'iPhoneの標準形式HEICは、Windows・役所・古いシステムで開けないことが多い定番トラブル。',
+    tool1L1: 'HEIC / HEIF に対応', tool1L2: 'まとめて一括変換', tool1L3: '向き（回転情報）も自動補正',
+    tool2T: '画像圧縮', tool2P: '画質スライダーと「目標KB以下」で、アップロード制限に合わせます。',
+    tool2L1: '画質 30〜100% を調整', tool2L2: '200KB / 500KB / 1MB / 2MB 目標', tool2L3: '変換前後のサイズをその場で比較',
+    tool3T: 'リサイズ・切り抜き（Crop）', tool3P: '長辺を指定するだけ。アスペクト比は自動で維持され、引き伸ばしはしません。不要な部分は切り抜きで取り除けます。',
+    tool3L1: '3840 / 1920 / 1280 / 800 / 400px', tool3L2: 'カードの「✂」からドラッグで範囲指定', tool3L3: '1:1 / 4:3 / 16:9 など比率プリセット付き', tool3L4: '元より大きくはしません',
+    tool4T: '形式変換 JPG / PNG / WebP', tool4P: '用途で使い分け。WebPはJPGより軽く、PNGは透過と文字の鮮明さが強み。',
+    tool4L1: 'JPG：互換性No.1・提出用', tool4L2: 'PNG：透過・ロゴ・スクショ', tool4L3: 'WebP：Web掲載で最軽量',
+    tool5T: '回転・補正', tool5P: '横向きになってしまった写真は、カードの回転ボタンで90°ずつ直してから保存。',
+    tool5L1: '1枚ずつ回転OK', tool5L2: 'EXIFの向きも考慮', tool5L3: '再圧縮せずにプレビュー反映',
+    tool6T: 'EXIF・位置情報の削除', tool6P: '写真には撮影場所のGPSが入っていることがあります。Canvasで再描画することで自動除去。',
+    tool6L1: 'GPS・機種・日時を除去', tool6L2: 'SNS・フリマ出品前に安心', tool6L3: 'オン／オフ切り替え可能',
+    ucH: 'こんなときに', ucSub: 'プリセットを選ぶだけで、その用途に合った設定になります。',
+    uc1T: '役所・ビザ・応募書類にアップロードしたい', uc1P: '「JPGのみ・2MBまで」といった制限に。長辺1920px＋JPGでほぼ確実に通ります。',
+    uc2T: 'iPhone写真をWindowsの家族に送りたい', uc2P: 'HEICのままだと相手が開けません。JPGに変換してZIPでまとめて渡せます。',
+    uc3T: 'ブログ・サイトを軽くしたい', uc3P: 'WebP＋1280px＋画質80%前後で、見た目をほぼ保ったまま容量を大幅削減。',
+    uc4T: 'フリマ・SNS投稿前に位置情報を消したい', uc4P: '自宅で撮った写真のGPS除去が目的。EXIF削除オン＋そのまま変換でOK。',
+    applyBtn: 'この設定を使う →',
+    tableH: '形式の早見表', tableSub: '迷ったらJPG。軽さならWebP、透過や文字のくっきり感ならPNGです。',
+    thFormat: '形式', thUse: '向いている用途', thSize: '容量', thNote: '注意点',
+    rowJpgUse: '写真全般、提出書類、メール添付', rowJpgSize: '小さい', rowJpgNote: '透過不可。繰り返し保存で劣化',
+    rowPngUse: 'スクリーンショット、ロゴ、透過画像', rowPngSize: '大きい', rowPngNote: '写真だと容量が膨らみがち',
+    rowWebpUse: 'Webサイト、ブログ、SNS', rowWebpSize: '最も小さい', rowWebpNote: '古いシステムでは開けない場合あり',
+    rowHeicUse: 'iPhone内の保存', rowHeicSize: '小さい', rowHeicNote: 'Windows・Web提出では非対応が多い → JPGへ',
+    faqH: 'よくある質問',
+    faq1Q: '画像はサーバーに送られますか？', faq1A: 'いいえ。変換・圧縮・リサイズはすべてこのページのJavaScriptとCanvasで処理します。HEIC変換ライブラリもブラウザ内で動作するため、画像ファイル自体が外部に送信されることはありません。',
+    faq2Q: 'HEICが変換できないときは？', faq2A: '一部のAndroid HEIFや、破損したファイルでは失敗することがあります。その場合は元の形式のまま表示されます。SafariではHEICを標準で読み込めるため、ブラウザを変えると成功する場合があります。',
+    faq3Q: '画質はどれくらいがおすすめ？', faq3A: '写真は85%がバランス良好です。提出書類は90〜95%、Web掲載なら75〜85%で十分なことが多く、容量を大きく減らせます。',
+    faq4Q: 'まとめて保存（ZIP）の中身は？', faq4A: '変換後の画像を、元のファイル名＋形式でまとめたZIPです。例：<span class="mono">IMG_1234.heic → IMG_1234.jpg</span>',
+    faq5Q: '切り抜き（Crop）はどうやりますか？', faq5A: '各画像カードの「✂」ボタンを押すと切り抜き画面が開きます。枠をドラッグして位置と大きさを決め、「この範囲で切り抜く」を押してください。1:1や16:9などの比率プリセットも選べます。切り抜き後にリサイズ・回転・圧縮が適用されます。',
+    footerNote: '画像ツール箱 — ブラウザ完結ツール集 ／ 姉妹ツール：PDFツール箱（pdf.kspheres.com）',
+    mitText: 'MITライセンスで公開しています',
+    cropTitle: '切り抜き（Crop）', arFree: '自由',
+    cropHint: '枠の中をドラッグで移動、四隅のハンドルをドラッグでサイズ変更できます。切り抜きは元の解像度で適用され、その後にリサイズ・回転・圧縮が行われます。',
+    cropReset: '全体に戻す', cropCancel: 'キャンセル', cropApply: 'この範囲で切り抜く',
+    countNone: 'まだ画像がありません',
+    countN: function(n){ return n+' 枚の画像'; },
+    sumCountText: function(n,done){ return n+'枚'+(done<n?'（'+done+'枚完了）':''); },
+    sumSaveText: function(pct){ return pct+'% 削減'; },
+    loading: '読み込み中…', processing: '処理中…',
+    metaBefore: '元', metaAfter: '変換後',
+    croppedTag: '✂ 切り抜き済', cappedTag: '（目標サイズ調整済）',
+    loadFailTitle: '⚠ 読み込めませんでした', loadFailSub: '対応形式か確認してください',
+    loadError: 'エラー：読み込み失敗',
+    saveBtn: '保存', rotateLabel: '90°回転', cropLabel: '切り抜き', removeLabel: '削除',
+    toastSample: 'サンプル画像を追加しました', toastNoImages: '画像ファイルが見つかりませんでした',
+    toastMax: '一度に扱えるのは50枚までです', toastCleared: 'すべて削除しました',
+    toastSaved: '保存しました', toastZipMaking: 'ZIPを作成しています…',
+    toastZipSaved: function(n){ return n+'枚をZIPで保存しました'; },
+    toastPreset: function(name){ return 'プリセット「'+name+'」を適用しました'; },
+    toastCropApplied: '切り抜きを適用しました', toastCropReset: '全体を使う設定に戻しました',
+    demoSub: '1600 × 1100 • デモ用に生成した画像です'
+  },
+  th: {
+    title: 'กล่องเครื่องมือรูปภาพ — แปลง HEIC, บีบอัด, ปรับขนาด และครอป',
+    appName: 'กล่องเครื่องมือรูปภาพ',
+    tagline: 'แปลง HEIC · บีบอัด · ปรับขนาด · ครอป — ทั้งหมดในเบราว์เซอร์ของคุณ',
+    privacy: '🔒 รูปภาพของคุณจะไม่ถูกอัปโหลดไปยังเซิร์ฟเวอร์ ทุกขั้นตอนทำงานภายในเบราว์เซอร์ของคุณเท่านั้น',
+    dropTitle: 'ลากและวางรูปภาพที่นี่',
+    dropDesc: 'คลิกเพื่อเลือก หรือวางด้วย Ctrl+V รูปภาพจะถูกประมวลผลภายในเบราว์เซอร์นี้เท่านั้น',
+    chipCompress: 'บีบอัด', chipResize: 'ปรับขนาด', chipRotate: 'หมุน', chipCrop: 'ครอป', chipExif: 'ลบ EXIF',
+    pickBtn: '＋ เลือกรูปภาพ', demoBtn: 'ลองใช้ตัวอย่าง',
+    settingsTitle: 'ตั้งค่าการแปลง', settingsDesc: 'เมื่อเปลี่ยนการตั้งค่า รูปภาพที่เพิ่มไว้แล้วจะอัปเดตทันที',
+    presetLabel: 'พรีเซ็ตตามการใช้งาน', presetLabelSub: '— แตะครั้งเดียวเพื่อปรับให้เหมาะสม',
+    presetGov: 'ยื่นเอกสาร / ราชการ', presetGovSub: 'JPG / ด้านยาวสุด 1920px',
+    presetMail: 'แนบอีเมล', presetMailSub: 'JPG / ประมาณ 2MB, 1280px',
+    presetSns: 'โซเชียล / บล็อก', presetSnsSub: 'WebP / 1280px, ไฟล์เล็ก',
+    presetOrig: 'แปลงตามต้นฉบับ', presetOrigSub: 'ไม่เปลี่ยนขนาด',
+    formatLabel: 'รูปแบบไฟล์ที่ส่งออก',
+    formatNote: 'ไฟล์ HEIC จะถูกแปลงเป็นรูปแบบที่เลือกโดยอัตโนมัติ PNG รองรับพื้นหลังโปร่งใส ส่วน JPG เข้ากันได้กับอุปกรณ์มากที่สุด',
+    qualityLabel: 'คุณภาพ', qualitySub: '— อัตราการบีบอัดสำหรับ JPG / WebP',
+    qLight: 'เน้นไฟล์เล็ก', qHigh: 'เน้นคุณภาพสูง',
+    q60: '60% ไฟล์เล็ก', q85: '85% แนะนำ', q95: '95% คุณภาพสูง',
+    resizeLabel: 'ปรับขนาด (ด้านที่ยาวที่สุด)',
+    rsNone: 'ไม่เปลี่ยน (ขนาดต้นฉบับ)', rs3840: '3840px — 4K', rs1920: '1920px — Full HD / สำหรับยื่นเอกสาร',
+    rs1280: '1280px — เว็บ / โซเชียล', rs800: '800px — ภาพย่อ, ไฟล์เล็ก', rs400: '400px — ไอคอน',
+    maxKbLabel: 'ขนาดเป้าหมาย (ไม่บังคับ)',
+    kbNone: 'ไม่กำหนด', kb200: 'ไม่เกิน 200 KB', kb500: 'ไม่เกิน 500 KB', kb1m: 'ไม่เกิน 1 MB', kb2m: 'ไม่เกิน 2 MB',
+    maxKbNote: 'ระบบจะปรับคุณภาพอัตโนมัติเพื่อให้ไฟล์ไม่เกินเป้าหมาย (เฉพาะ JPG / WebP)',
+    stripT: 'ลบข้อมูลตำแหน่ง (EXIF)',
+    stripD: 'ลบข้อมูลเมตา เช่น สถานที่ถ่ายและวันที่ ก่อนบันทึก แนะนำเพื่อความเป็นส่วนตัวเมื่อแชร์ไฟล์',
+    filesTitle: 'รายการรูปภาพ', clearBtn: 'ลบทั้งหมด', dlAllBtn: '⬇ บันทึกทั้งหมด',
+    sumTotal: 'รวม', sumBefore: 'ก่อนแปลง', sumAfter: 'หลังแปลง', sumSaved: 'ลดลง',
+    emptyTitle: 'เมื่อเพิ่มรูปภาพ ตัวอย่างจะแสดงที่นี่',
+    emptyDesc: 'แม้แต่รูป HEIC ที่เปิดบน Windows ไม่ได้ ก็แปลงเป็น JPG ได้เพียงแค่เพิ่มเข้ามา<br>เริ่มต้นด้วยการวางรูปจาก iPhone 1 รูปลงในพื้นที่ด้านบน',
+    zipNote: '💡 ปุ่มบันทึกทั้งหมดจะดาวน์โหลดเป็นไฟล์ ZIP (เมื่อมี 2 รูปขึ้นไป) หากมีเพียงรูปเดียวจะบันทึกเป็นไฟล์รูปโดยตรง ทุกขั้นตอนทำงานบนอุปกรณ์ของคุณ รูปภาพจะไม่ถูกส่งออกไปภายนอก',
+    toolsH: 'เจาะลึก: เครื่องมือ 6 อย่าง',
+    toolsSub: 'ปัญหาเรื่องรูปภาพมีหลายแบบ กล่องเครื่องมือนี้รวมงานที่พบบ่อย 6 อย่างไว้ในหน้าเดียว',
+    tool1T: 'แปลง HEIC → JPG', tool1P: 'HEIC ซึ่งเป็นรูปแบบเริ่มต้นของ iPhone มักเปิดไม่ได้บน Windows เว็บไซต์ราชการ หรือระบบเก่า',
+    tool1L1: 'รองรับ HEIC / HEIF', tool1L2: 'แปลงหลายไฟล์พร้อมกัน', tool1L3: 'ปรับทิศทางรูปอัตโนมัติ',
+    tool2T: 'บีบอัดรูปภาพ', tool2P: 'ใช้แถบเลื่อนคุณภาพและขนาดเป้าหมาย เพื่อให้ตรงตามข้อจำกัดการอัปโหลด',
+    tool2L1: 'ปรับคุณภาพได้ 30–100%', tool2L2: 'เป้าหมาย: 200KB / 500KB / 1MB / 2MB', tool2L3: 'เปรียบเทียบขนาดก่อน / หลังได้ทันที',
+    tool3T: 'ปรับขนาดและครอป', tool3P: 'เพียงกำหนดด้านที่ยาวที่สุด อัตราส่วนภาพจะคงเดิมและไม่มีการขยายภาพ ตัดส่วนที่ไม่ต้องการออกด้วยการครอป',
+    tool3L1: '3840 / 1920 / 1280 / 800 / 400px', tool3L2: 'ลากเพื่อเลือกพื้นที่จากปุ่ม ✂', tool3L3: 'พรีเซ็ตอัตราส่วน: 1:1 / 4:3 / 16:9 และอื่น ๆ', tool3L4: 'ไม่ขยายใหญ่กว่าต้นฉบับ',
+    tool4T: 'แปลง JPG / PNG / WebP', tool4P: 'เลือกตามการใช้งาน WebP ไฟล์เล็กกว่า JPG ส่วน PNG รักษาความโปร่งใสและตัวอักษรให้คมชัด',
+    tool4L1: 'JPG: เข้ากันได้ดีที่สุด เหมาะสำหรับยื่นเอกสาร', tool4L2: 'PNG: พื้นหลังโปร่งใส โลโก้ ภาพหน้าจอ', tool4L3: 'WebP: ไฟล์เล็กที่สุดสำหรับเว็บ',
+    tool5T: 'หมุนและแก้ไข', tool5P: 'รูปเอียงหรือกลับด้าน? แก้ไขทีละ 90° ด้วยปุ่มหมุนในการ์ดแต่ละใบก่อนบันทึก',
+    tool5L1: 'หมุนทีละรูปได้', tool5L2: 'เคารพทิศทางจาก EXIF', tool5L3: 'ตัวอย่างอัปเดตโดยไม่ต้องบีบอัดซ้ำ',
+    tool6T: 'ลบ EXIF / ข้อมูลตำแหน่ง', tool6P: 'รูปภาพอาจมีข้อมูล GPS การวาดใหม่ผ่าน Canvas จะลบข้อมูลเหล่านี้โดยอัตโนมัติ',
+    tool6L1: 'ลบ GPS รุ่นอุปกรณ์ และเวลา', tool6L2: 'ปลอดภัยกว่าก่อนโพสต์โซเชียลหรือขายของออนไลน์', tool6L3: 'เปิด / ปิดได้',
+    ucH: 'ใช้เมื่อไหร่ดี', ucSub: 'เลือกพรีเซ็ต การตั้งค่าจะตรงกับงานทันที',
+    uc1T: 'อัปโหลดเอกสารราชการ วีซ่า หรือใบสมัคร', uc1P: 'สำหรับข้อจำกัดแบบ “JPG เท่านั้น ไม่เกิน 2MB” ด้านยาวสุด 1920px + JPG ใช้ได้แทบทุกที่',
+    uc2T: 'ส่งรูปจาก iPhone ให้ครอบครัวที่ใช้ Windows', uc2P: 'ไฟล์ HEIC เปิดไม่ได้ในเครื่องของพวกเขา แปลงเป็น JPG แล้วส่งเป็น ZIP ไฟล์เดียว',
+    uc3T: 'ทำให้บล็อกหรือเว็บไซต์เบาลง', uc3P: 'WebP + 1280px + คุณภาพประมาณ 80% ลดขนาดได้มากโดยที่ภาพยังดูแทบเหมือนเดิม',
+    uc4T: 'ลบข้อมูลตำแหน่งก่อนโพสต์ขายของ / โซเชียล', uc4P: 'ลบ GPS ออกจากรูปที่ถ่ายที่บ้าน เปิดการลบ EXIF + แปลงตามต้นฉบับก็เพียงพอ',
+    applyBtn: 'ใช้การตั้งค่านี้ →',
+    tableH: 'ตารางสรุปรูปแบบไฟล์', tableSub: 'ถ้าไม่แน่ใจให้เลือก JPG หากต้องการไฟล์เล็กให้เลือก WebP หากต้องการพื้นหลังโปร่งใสและตัวอักษรคมชัดให้เลือก PNG',
+    thFormat: 'รูปแบบ', thUse: 'เหมาะสำหรับ', thSize: 'ขนาดไฟล์', thNote: 'ข้อควรระวัง',
+    rowJpgUse: 'รูปถ่ายทั่วไป เอกสาร อีเมล', rowJpgSize: 'เล็ก', rowJpgNote: 'ไม่รองรับพื้นหลังโปร่งใส คุณภาพลดลงหากบันทึกซ้ำ',
+    rowPngUse: 'ภาพหน้าจอ โลโก้ ภาพโปร่งใส', rowPngSize: 'ใหญ่', rowPngNote: 'รูปถ่ายมักมีไฟล์ใหญ่',
+    rowWebpUse: 'เว็บไซต์ บล็อก โซเชียล', rowWebpSize: 'เล็กที่สุด', rowWebpNote: 'อาจเปิดไม่ได้ในระบบเก่า',
+    rowHeicUse: 'เก็บใน iPhone', rowHeicSize: 'เล็ก', rowHeicNote: 'มักไม่รองรับบน Windows / แบบฟอร์มออนไลน์ → แปลงเป็น JPG',
+    faqH: 'คำถามที่พบบ่อย',
+    faq1Q: 'รูปภาพของฉันจะถูกส่งไปยังเซิร์ฟเวอร์หรือไม่?', faq1A: 'ไม่ การแปลง บีบอัด และปรับขนาดทั้งหมดทำงานในหน้านี้ด้วย JavaScript และ Canvas ไลบรารีแปลง HEIC ก็ทำงานในเบราว์เซอร์เช่นกัน ไฟล์รูปภาพจึงไม่ถูกส่งออกไปไหน',
+    faq2Q: 'ถ้าแปลงไฟล์ HEIC ไม่ได้ต้องทำอย่างไร?', faq2A: 'ไฟล์ HEIF จาก Android บางรุ่นหรือไฟล์ที่เสียหายอาจแปลงไม่สำเร็จ และจะแสดงในรูปแบบต้นฉบับ Safari อ่าน HEIC ได้โดยตรง การเปลี่ยนเบราว์เซอร์อาจช่วยได้',
+    faq3Q: 'ควรตั้งคุณภาพเท่าไหร่?', faq3A: '85% สมดุลดีสำหรับรูปถ่ายทั่วไป ใช้ 90–95% สำหรับเอกสาร และ 75–85% มักเพียงพอสำหรับเว็บ พร้อมลดขนาดได้มาก',
+    faq4Q: 'ในไฟล์ ZIP มีอะไรบ้าง?', faq4A: 'รูปภาพหลังแปลง โดยใช้ชื่อไฟล์เดิมแต่เปลี่ยนนามสกุล ตัวอย่าง: <span class="mono">IMG_1234.heic → IMG_1234.jpg</span>',
+    faq5Q: 'ครอปรูปอย่างไร?', faq5A: 'กดปุ่ม ✂ ในการ์ดรูปภาพเพื่อเปิดหน้าจอครอป ลากกรอบเพื่อกำหนดตำแหน่งและขนาด แล้วกด “ครอปตามพื้นที่นี้” มีพรีเซ็ตอัตราส่วนเช่น 1:1 และ 16:9 ให้เลือก การปรับขนาด หมุน และบีบอัดจะทำหลังจากครอป',
+    footerNote: 'กล่องเครื่องมือรูปภาพ — ชุดเครื่องมือที่ทำงานในเบราว์เซอร์ / เครื่องมือคู่กัน: PDF Tools (pdf.kspheres.com)',
+    mitText: 'เผยแพร่ภายใต้สัญญาอนุญาต MIT',
+    cropTitle: 'ครอป', arFree: 'อิสระ',
+    cropHint: 'ลากด้านในกรอบเพื่อย้าย ลากที่จับมุมเพื่อปรับขนาด การครอปจะทำที่ความละเอียดเต็ม ก่อนการปรับขนาด หมุน และบีบอัด',
+    cropReset: 'กลับเป็นภาพเต็ม', cropCancel: 'ยกเลิก', cropApply: 'ครอปตามพื้นที่นี้',
+    countNone: 'ยังไม่มีรูปภาพ',
+    countN: function(n){ return n+' รูป'; },
+    sumCountText: function(n,done){ return n+' ไฟล์'+(done<n?' (เสร็จแล้ว '+done+')':''); },
+    sumSaveText: function(pct){ return 'เล็กลง '+pct+'%'; },
+    loading: 'กำลังโหลด…', processing: 'กำลังประมวลผล…',
+    metaBefore: 'ต้นฉบับ', metaAfter: 'ผลลัพธ์',
+    croppedTag: '✂ ครอปแล้ว', cappedTag: '(ปรับให้ไม่เกินขนาดเป้าหมาย)',
+    loadFailTitle: '⚠ โหลดรูปนี้ไม่ได้', loadFailSub: 'โปรดตรวจสอบรูปแบบไฟล์',
+    loadError: 'ข้อผิดพลาด: โหลดไม่สำเร็จ',
+    saveBtn: 'บันทึก', rotateLabel: 'หมุน 90°', cropLabel: 'ครอป', removeLabel: 'ลบ',
+    toastSample: 'เพิ่มรูปตัวอย่างแล้ว', toastNoImages: 'ไม่พบไฟล์รูปภาพ',
+    toastMax: 'จัดการได้สูงสุดครั้งละ 50 รูป', toastCleared: 'ลบรูปทั้งหมดแล้ว',
+    toastSaved: 'บันทึกแล้ว', toastZipMaking: 'กำลังสร้าง ZIP…',
+    toastZipSaved: function(n){ return 'บันทึก '+n+' รูปเป็น ZIP แล้ว'; },
+    toastPreset: function(name){ return 'ใช้พรีเซ็ต “'+name+'” แล้ว'; },
+    toastCropApplied: 'ครอปเรียบร้อยแล้ว', toastCropReset: 'กลับไปใช้ภาพเต็มแล้ว',
+    demoSub: '1600 × 1100 • สร้างขึ้นเพื่อสาธิต'
+  }
+};
+
+/* Language selection: saved choice wins; otherwise browser language
+   (Japanese -> ja, anything else -> en). Same as PDF Tools. */
+var LANG_STORAGE_KEY = 'image-tools-lang';
+var LANG = (function(){
+  try{ var saved = localStorage.getItem(LANG_STORAGE_KEY); if(saved && I18N[saved]) return saved; }catch(e){}
+  var nav = (navigator.language || 'en').toLowerCase();
+  if(nav.startsWith('ja')) return 'ja';
+  if(nav.startsWith('th')) return 'th';
+  return 'en';
+})();
+var t = I18N[LANG];
+
+function applyLang(){
+  document.title = t.title;
+  document.documentElement.lang = LANG;
+  document.querySelectorAll('[data-i18n]').forEach(function(el){ var v = t[el.dataset.i18n]; if(typeof v === 'string') el.textContent = v; });
+  document.querySelectorAll('[data-i18n-html]').forEach(function(el){ var v = t[el.dataset.i18nHtml]; if(typeof v === 'string') el.innerHTML = v; });
+  var enBtn = document.getElementById('langEn'), jaBtn = document.getElementById('langJa'), thBtn = document.getElementById('langTh');
+  if(enBtn) enBtn.classList.toggle('active', LANG === 'en');
+  if(jaBtn) jaBtn.classList.toggle('active', LANG === 'ja');
+  if(thBtn) thBtn.classList.toggle('active', LANG === 'th');
+}
+function setLang(next){
+  if(!I18N[next]) return;
+  LANG = next; t = I18N[LANG];
+  try{ localStorage.setItem(LANG_STORAGE_KEY, LANG); }catch(e){}
+  applyLang();
+  if(window.refreshI18n) window.refreshI18n();
+}
+</script>
+
+<script>
+(function(){
+  var drop=document.getElementById('dropZone');
+  var input=document.getElementById('fileInput');
+  var grid=document.getElementById('grid');
+  var empty=document.getElementById('emptyState');
+  var summaryEl=document.getElementById('summary');
+  var toastEl=document.getElementById('toast');
+  var items=[]; // {id,file,url,img,width,height,outBlob,outUrl,outName,rotation,crop,status}
+  var seq=0;
+  var processing=false;
+
+  applyLang();
+  document.getElementById('langEn').addEventListener('click',function(){ setLang('en'); });
+  document.getElementById('langJa').addEventListener('click',function(){ setLang('ja'); });
+  document.getElementById('langTh').addEventListener('click',function(){ setLang('th'); });
+  window.refreshI18n=function(){ items.forEach(refreshCard); updateSummary(); if(cropState) closeCrop(); };
+
+  function toast(msg){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(function(){toastEl.classList.remove('show')},2600); }
+  function fmtBytes(b){ if(!b&&b!==0) return '—'; if(b<1024) return b+' B'; if(b<1024*1024) return (b/1024).toFixed(1)+' KB'; return (b/1024/1024).toFixed(2)+' MB'; }
+  function extOf(name){ var m=name.toLowerCase().match(/\.([a-z0-9]+)$/); return m?m[1]:''; }
+  function baseName(name){ return name.replace(/\.[^.]+$/,''); }
+  function outExt(mime){ return mime==='image/png'?'png':mime==='image/webp'?'webp':'jpg'; }
+
+  function getSettings(){
+    var fmtBtn=document.querySelector('#formatSeg button.active');
+    return {
+      mime: fmtBtn?fmtBtn.dataset.fmt:'image/jpeg',
+      quality: parseInt(document.getElementById('quality').value,10)/100,
+      maxSide: parseInt(document.getElementById('resizeSel').value,10)||0,
+      maxKb: parseInt(document.getElementById('maxKb').value,10)||0
+    };
+  }
+
+  // Drop handling
+  drop.addEventListener('click',function(e){ if(e.target.closest('button')) return; input.click(); });
+  document.getElementById('pickBtn').addEventListener('click',function(e){ e.stopPropagation(); input.click(); });
+  drop.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); input.click(); }});
+  ['dragenter','dragover'].forEach(function(ev){ drop.addEventListener(ev,function(e){ e.preventDefault(); drop.classList.add('drag'); }); });
+  ['dragleave','drop'].forEach(function(ev){ drop.addEventListener(ev,function(e){ e.preventDefault(); drop.classList.remove('drag'); }); });
+  drop.addEventListener('drop',function(e){ var f=e.dataTransfer.files; if(f&&f.length) addFiles(f); });
+  input.addEventListener('change',function(){ if(input.files.length) addFiles(input.files); input.value=''; });
+  document.addEventListener('paste',function(e){ var files=e.clipboardData&&e.clipboardData.files; if(files&&files.length) addFiles(files); });
+
+  document.getElementById('demoBtn').addEventListener('click',function(){
+    var c=document.createElement('canvas'); c.width=1600; c.height=1100; var x=c.getContext('2d');
+    var g=x.createLinearGradient(0,0,1600,1100); g.addColorStop(0,'#2563eb'); g.addColorStop(.55,'#f59e0b'); g.addColorStop(1,'#1e3a5f');
+    x.fillStyle=g; x.fillRect(0,0,1600,1100);
+    x.fillStyle='rgba(255,255,255,.92)'; x.beginPath(); x.arc(1250,300,150,0,Math.PI*2); x.fill();
+    x.fillStyle='#fff'; x.font='800 72px sans-serif'; x.fillText('Sample Photo',70,980); x.font='400 34px sans-serif'; x.fillText(t.demoSub,70,1035);
+    c.toBlob(function(b){ var f=new File([b],'sample-photo.jpg',{type:'image/jpeg'}); addFiles([f]); toast(t.toastSample); },'image/jpeg',0.92);
+  });
+
+  async function addFiles(fileList){
+    var arr=Array.from(fileList).filter(function(f){ return f.type.startsWith('image/')||/heic|heif/i.test(f.name)||/heic|heif/i.test(f.type); });
+    if(!arr.length){ toast(t.toastNoImages); return; }
+    if(items.length+arr.length>50){ toast(t.toastMax); arr=arr.slice(0,50-items.length); }
+    for(var i=0;i<arr.length;i++){
+      var f=arr[i];
+      var item={id:++seq,file:f,rotation:0,crop:null,status:'loading',outBlob:null,outUrl:null,width:0,height:0,img:null,url:null};
+      items.push(item); renderItem(item);
+      await loadItem(item);
+    }
+    updateSummary(); scheduleProcess();
+  }
+
+  async function loadItem(item){
+    var f=item.file; var ext=extOf(f.name);
+    try{
+      var blob=f;
+      if((ext==='heic'||ext==='heif'||/heic|heif/i.test(f.type)) && window.heic2any){
+        try{ var conv=await heic2any({blob:f,toType:'image/jpeg',quality:0.92}); blob=Array.isArray(conv)?conv[0]:conv; item.wasHeic=true; }catch(e){ /* fallback */ }
+      }
+      item.url=URL.createObjectURL(blob); item._srcBlob=blob;
+      var img=new Image();
+      await new Promise(function(res,rej){ img.onload=res; img.onerror=rej; img.src=item.url; });
+      item.img=img; item.width=img.naturalWidth; item.height=img.naturalHeight; item.status='ready';
+    }catch(e){ item.status='error'; item.error='load'; }
+    refreshCard(item);
+  }
+
+  function renderItem(item){
+    var card=document.createElement('article'); card.className='card'; card.id='card-'+item.id;
+    card.innerHTML='<div class="thumb"><span class="tag"></span></div><div class="card-body"><div class="fname"></div><div class="meta"></div><div class="progress"><i></i></div><div class="card-actions"></div></div>';
+    card.querySelector('.tag').textContent=t.loading;
+    card.querySelector('.fname').textContent=item.file.name;
+    card.querySelector('.meta').textContent=t.processing;
+    grid.appendChild(card); empty.style.display='none';
+    document.getElementById('clearBtn').disabled=false;
+  }
+
+  function refreshCard(item){
+    var card=document.getElementById('card-'+item.id); if(!card) return;
+    var thumb=card.querySelector('.thumb');
+    if(item.img){
+      var disp=item.outUrl||item.url;
+      var savePct='';
+      if(item.outBlob && item.file.size){ var pct=Math.round((1-item.outBlob.size/item.file.size)*100); if(pct>0) savePct='<span class="sav">-'+pct+'%</span>'; }
+      thumb.innerHTML='<img alt=""><span class="tag">'+(item.wasHeic?'HEIC → ':'')+(item.outBlob?outExt(getSettings().mime).toUpperCase():extOf(item.file.name).toUpperCase()||'IMG')+'</span>'+savePct;
+      var im=thumb.querySelector('img'); im.src=disp; im.alt=item.file.name; im.style.transform='rotate('+(item.rotation||0)+'deg)';
+    } else if(item.status==='error'){
+      thumb.innerHTML='<span style="font-size:13px;padding:12px;text-align:center">'+t.loadFailTitle+'<br><span style="opacity:.7;font-size:12px">'+t.loadFailSub+'</span></span>';
+    }
+    var meta=card.querySelector('.meta');
+    if(item.status==='error'){ meta.textContent=t.loadError; }
+    else if(item.width){
+      var outDims=item._outW? item._outW+' × '+item._outH+' px':'—';
+      meta.innerHTML=t.metaBefore+'：<b>'+item.width+' × '+item.height+' px</b> ・ '+fmtBytes(item.file.size)+'<br>'+t.metaAfter+'：<b>'+outDims+'</b> ・ <b>'+(item.outBlob?fmtBytes(item.outBlob.size):t.processing)+'</b>'+(item.crop?' <span style="color:var(--accent)">'+t.croppedTag+'</span>':'')+(item._capped?' <span style="color:var(--warn)">'+t.cappedTag+'</span>':'');
+    }
+    var prog=card.querySelector('.progress i'); if(prog) prog.style.width=item.outBlob?'100%':(item.img?'55%':'25%');
+    var actions=card.querySelector('.card-actions'); actions.innerHTML='';
+    var rot=document.createElement('button'); rot.className='mini'; rot.title=t.rotateLabel; rot.textContent='↻'; rot.setAttribute('aria-label',t.rotateLabel);
+    rot.onclick=function(){ item.rotation=((item.rotation||0)+90)%360; refreshCard(item); scheduleProcess(); };
+    var cropB=document.createElement('button'); cropB.className='mini'; cropB.title=t.cropLabel; cropB.textContent='✂'; cropB.setAttribute('aria-label',t.cropLabel);
+    if(item.crop){ cropB.style.borderColor='var(--accent)'; cropB.style.color='var(--accent)'; }
+    cropB.onclick=function(){ openCrop(item); };
+    var dl=document.createElement('button'); dl.className='mini primary'; dl.textContent=t.saveBtn; dl.disabled=!item.outBlob;
+    dl.onclick=function(){ if(item.outBlob) downloadBlob(item.outBlob,item.outName); };
+    var rm=document.createElement('button'); rm.className='mini'; rm.title=t.removeLabel; rm.textContent='×'; rm.setAttribute('aria-label',t.removeLabel);
+    rm.onclick=function(){ removeItem(item.id); };
+    actions.appendChild(rot); actions.appendChild(cropB); actions.appendChild(dl); actions.appendChild(rm);
+    document.getElementById('dlAllBtn').disabled=!items.some(function(x){return x.outBlob});
+  }
+
+  function removeItem(id){
+    var idx=items.findIndex(function(x){return x.id===id}); if(idx<0) return;
+    var it=items[idx]; if(it.url) URL.revokeObjectURL(it.url); if(it.outUrl) URL.revokeObjectURL(it.outUrl);
+    items.splice(idx,1); var c=document.getElementById('card-'+id); if(c) c.remove();
+    if(!items.length){ empty.style.display='block'; summaryEl.style.display='none'; document.getElementById('clearBtn').disabled=true; document.getElementById('dlAllBtn').disabled=true; }
+    updateSummary();
+  }
+  document.getElementById('clearBtn').addEventListener('click',function(){ items.slice().forEach(function(it){ removeItem(it.id); }); toast(t.toastCleared); });
+
+  var timer=null;
+  function scheduleProcess(){ clearTimeout(timer); timer=setTimeout(processAll,120); }
+
+  async function processAll(){
+    if(processing) return; processing=true;
+    var s=getSettings();
+    for(var i=0;i<items.length;i++){ var it=items[i]; if(it.img) await processOne(it,s); }
+    processing=false; updateSummary();
+    items.forEach(refreshCard);
+  }
+
+  async function processOne(item,s){
+    var img=item.img; var rot=item.rotation||0;
+    var sx=0, sy=0, sw=img.naturalWidth, sh=img.naturalHeight;
+    if(item.crop){ sx=item.crop.x; sy=item.crop.y; sw=item.crop.w; sh=item.crop.h; }
+    var scale=1;
+    var longSide=Math.max(sw,sh);
+    if(s.maxSide && longSide>s.maxSide) scale=s.maxSide/longSide;
+    var w=Math.max(1,Math.round(sw*scale)), h=Math.max(1,Math.round(sh*scale));
+    var canvas=document.createElement('canvas');
+    var swap=(rot===90||rot===270);
+    canvas.width=swap?h:w; canvas.height=swap?w:h;
+    var ctx=canvas.getContext('2d');
+    if(s.mime==='image/jpeg'){ ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); }
+    ctx.save(); ctx.translate(canvas.width/2,canvas.height/2); ctx.rotate(rot*Math.PI/180); ctx.drawImage(img,sx,sy,sw,sh,-w/2,-h/2,w,h); ctx.restore();
+    item._outW=canvas.width; item._outH=canvas.height; item._capped=false;
+    var blob=await new Promise(function(res){ canvas.toBlob(res,s.mime,s.mime==='image/png'?undefined:s.quality); });
+    if(s.maxKb && s.mime!=='image/png' && blob && blob.size>s.maxKb*1024){
+      var q=s.quality;
+      while(blob.size>s.maxKb*1024 && q>0.25){ q-=0.12; var b2=await new Promise(function(res){ canvas.toBlob(res,s.mime,q); }); if(!b2) break; blob=b2; item._capped=true; }
+    }
+    if(!blob) return;
+    if(item.outUrl) URL.revokeObjectURL(item.outUrl);
+    item.outBlob=blob; item.outUrl=URL.createObjectURL(blob);
+    item.outName=baseName(item.file.name)+'.'+outExt(s.mime);
+  }
+
+  function updateSummary(){
+    var n=items.length;
+    document.getElementById('countLabel').textContent=n? t.countN(n) : t.countNone;
+    if(!n){ summaryEl.style.display='none'; return; }
+    summaryEl.style.display='flex';
+    var before=items.reduce(function(a,x){return a+x.file.size},0);
+    var done=items.filter(function(x){return x.outBlob});
+    var after=done.reduce(function(a,x){return a+x.outBlob.size},0);
+    document.getElementById('sumCount').textContent=t.sumCountText(n,done.length);
+    document.getElementById('sumBefore').textContent=fmtBytes(before);
+    document.getElementById('sumAfter').textContent=done.length?fmtBytes(after):'—';
+    document.getElementById('sumSave').textContent=(done.length&&before)? t.sumSaveText(Math.round((1-after/before)*100)) : '—';
+  }
+
+  function downloadBlob(blob,name){ var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){URL.revokeObjectURL(a.href)},4000); }
+
+  document.getElementById('dlAllBtn').addEventListener('click',async function(){
+    var ready=items.filter(function(x){return x.outBlob}); if(!ready.length) return;
+    if(ready.length===1){ downloadBlob(ready[0].outBlob,ready[0].outName); toast(t.toastSaved); return; }
+    if(!window.JSZip){ ready.forEach(function(x,i){ setTimeout(function(){downloadBlob(x.outBlob,x.outName)},i*350); }); return; }
+    toast(t.toastZipMaking);
+    var zip=new JSZip(); var seen={};
+    ready.forEach(function(x){ var name=x.outName; if(seen[name]){ var b=baseName(name); var e=extOf(name); name=b+'-'+seen[name]+'.'+e; } seen[x.outName]=(seen[x.outName]||1)+1; zip.file(name,x.outBlob); });
+    var blob=await zip.generateAsync({type:'blob'}); downloadBlob(blob,'images.zip'); toast(t.toastZipSaved(ready.length));
+  });
+
+  /* ---------- Crop editor ---------- */
+  var cropOverlay=document.getElementById('cropOverlay');
+  var cropImg=document.getElementById('cropImg');
+  var cropBox=document.getElementById('cropBox');
+  var cropOut=document.getElementById('cropOutSize');
+  var cropState=null;
+
+  function openCrop(item){
+    if(!item.img) return;
+    cropState={item:item,ar:0,rect:null,scale:1,dw:0,drag:null};
+    document.querySelectorAll('#cropAspects button').forEach(function(b){ b.classList.toggle('active',b.dataset.ar==='0'); });
+    cropImg.src=item.url;
+    cropOverlay.hidden=false;
+    document.body.style.overflow='hidden';
+    var tries=0;
+    var init=function(){
+      var dw=cropImg.clientWidth, dh=cropImg.clientHeight;
+      if(!dw||!dh){ if(++tries<40) setTimeout(init,30); return; }
+      cropState.dw=dw; cropState.scale=item.width/dw;
+      if(item.crop){ cropState.rect={x:item.crop.x/cropState.scale,y:item.crop.y/cropState.scale,w:item.crop.w/cropState.scale,h:item.crop.h/cropState.scale}; }
+      else { var ix=dw*0.04, iy=dh*0.04; cropState.rect={x:ix,y:iy,w:dw-ix*2,h:dh-iy*2}; }
+      drawCropBox();
+    };
+    if(cropImg.complete&&cropImg.naturalWidth) init(); else cropImg.onload=init;
+  }
+  function closeCrop(){ cropOverlay.hidden=true; document.body.style.overflow=''; cropState=null; }
+  function drawCropBox(){
+    if(!cropState||!cropState.rect) return;
+    var r=cropState.rect;
+    cropBox.style.left=r.x+'px'; cropBox.style.top=r.y+'px'; cropBox.style.width=r.w+'px'; cropBox.style.height=r.h+'px';
+    cropOut.textContent=Math.round(r.w*cropState.scale)+' × '+Math.round(r.h*cropState.scale)+' px';
+  }
+  function clampRect(){
+    var r=cropState.rect, dw=cropImg.clientWidth, dh=cropImg.clientHeight, min=20;
+    r.w=Math.max(min,Math.min(r.w,dw)); r.h=Math.max(min,Math.min(r.h,dh));
+    r.x=Math.max(0,Math.min(r.x,dw-r.w)); r.y=Math.max(0,Math.min(r.y,dh-r.h));
+  }
+  cropBox.addEventListener('pointerdown',function(e){
+    if(!cropState) return;
+    e.preventDefault();
+    try{ cropBox.setPointerCapture(e.pointerId); }catch(err){}
+    var handle=(e.target.classList&&e.target.classList.contains('crop-h'))?e.target.dataset.h:'move';
+    cropState.drag={mode:handle,sx:e.clientX,sy:e.clientY,rect:{x:cropState.rect.x,y:cropState.rect.y,w:cropState.rect.w,h:cropState.rect.h}};
+  });
+  cropBox.addEventListener('pointermove',function(e){
+    if(!cropState||!cropState.drag) return;
+    var d=cropState.drag, dx=e.clientX-d.sx, dy=e.clientY-d.sy, r=cropState.rect, o=d.rect;
+    var dw=cropImg.clientWidth, dh=cropImg.clientHeight, min=20;
+    if(d.mode==='move'){ r.x=o.x+dx; r.y=o.y+dy; }
+    else{
+      var x1=o.x, y1=o.y, x2=o.x+o.w, y2=o.y+o.h;
+      if(d.mode.indexOf('e')>=0) x2=o.x+o.w+dx;
+      if(d.mode.indexOf('w')>=0) x1=o.x+dx;
+      if(d.mode.indexOf('s')>=0) y2=o.y+o.h+dy;
+      if(d.mode.indexOf('n')>=0) y1=o.y+dy;
+      if(cropState.ar>0){
+        var hpx=Math.abs(x2-x1)/cropState.ar;
+        if(d.mode.indexOf('n')>=0) y1=y2-hpx; else y2=y1+hpx;
+      }
+      x1=Math.max(0,Math.min(x1,dw-min)); x2=Math.max(min,Math.min(x2,dw));
+      y1=Math.max(0,Math.min(y1,dh-min)); y2=Math.max(min,Math.min(y2,dh));
+      if(x2-x1<min){ if(d.mode.indexOf('w')>=0) x1=x2-min; else x2=x1+min; }
+      if(y2-y1<min){ if(d.mode.indexOf('n')>=0) y1=y2-min; else y2=y1+min; }
+      r.x=Math.min(x1,x2); r.y=Math.min(y1,y2); r.w=Math.abs(x2-x1); r.h=Math.abs(y2-y1);
+    }
+    clampRect(); drawCropBox();
+  });
+  function endDrag(){ if(cropState) cropState.drag=null; }
+  cropBox.addEventListener('pointerup',endDrag);
+  cropBox.addEventListener('pointercancel',endDrag);
+
+  document.getElementById('cropAspects').addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b||!cropState) return;
+    this.querySelectorAll('button').forEach(function(x){ x.classList.remove('active'); });
+    b.classList.add('active');
+    cropState.ar=parseFloat(b.dataset.ar)||0;
+    if(cropState.ar>0&&cropState.rect){
+      var r=cropState.rect; r.h=r.w/cropState.ar;
+      if(r.y+r.h>cropImg.clientHeight){ r.h=cropImg.clientHeight-r.y; r.w=r.h*cropState.ar; }
+      clampRect(); drawCropBox();
+    }
+  });
+  document.getElementById('cropApply').addEventListener('click',function(){
+    if(!cropState) return;
+    var it=cropState.item, r=cropState.rect, sc=cropState.scale;
+    var cx=Math.max(0,Math.round(r.x*sc)), cy=Math.max(0,Math.round(r.y*sc));
+    var cw=Math.min(Math.round(r.w*sc),it.width-cx), ch=Math.min(Math.round(r.h*sc),it.height-cy);
+    var full=(cx<=1&&cy<=1&&cw>=it.width-1&&ch>=it.height-1);
+    it.crop=full?null:{x:cx,y:cy,w:cw,h:ch};
+    closeCrop(); refreshCard(it); scheduleProcess();
+    toast(full?t.toastCropReset:t.toastCropApplied);
+  });
+  document.getElementById('cropReset').addEventListener('click',function(){
+    if(!cropState) return;
+    cropState.rect={x:0,y:0,w:cropImg.clientWidth,h:cropImg.clientHeight};
+    drawCropBox();
+  });
+  document.getElementById('cropCancel').addEventListener('click',closeCrop);
+  cropOverlay.addEventListener('click',function(e){ if(e.target===cropOverlay) closeCrop(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!cropOverlay.hidden) closeCrop(); });
+  window.addEventListener('resize',function(){
+    if(!cropState||!cropState.rect) return;
+    var dw=cropImg.clientWidth; if(!dw) return;
+    if(cropState.dw&&dw!==cropState.dw){
+      var k=dw/cropState.dw, r=cropState.rect;
+      r.x*=k; r.y*=k; r.w*=k; r.h*=k;
+    }
+    cropState.dw=dw; cropState.scale=cropState.item.width/dw;
+    clampRect(); drawCropBox();
+  });
+
+  /* ---------- Settings ---------- */
+  document.getElementById('formatSeg').addEventListener('click',function(e){ var b=e.target.closest('button'); if(!b) return; this.querySelectorAll('button').forEach(function(x){x.classList.remove('active')}); b.classList.add('active'); clearPresets(); scheduleProcess(); });
+  var qEl=document.getElementById('quality');
+  qEl.addEventListener('input',function(){ document.getElementById('qLabel').textContent=qEl.value+'%'; clearPresets(); scheduleProcess(); });
+  document.querySelectorAll('[data-q]').forEach(function(b){ b.addEventListener('click',function(){ qEl.value=b.dataset.q; document.getElementById('qLabel').textContent=b.dataset.q+'%'; clearPresets(); scheduleProcess(); }); });
+  document.getElementById('resizeSel').addEventListener('change',function(){ clearPresets(); scheduleProcess(); });
+  document.getElementById('maxKb').addEventListener('change',function(){ clearPresets(); scheduleProcess(); });
+
+  function clearPresets(){ document.querySelectorAll('#presets button').forEach(function(x){x.classList.remove('active')}); }
+  function applyPreset(name){
+    clearPresets(); var btn=document.querySelector('#presets [data-preset="'+name+'"]'); if(btn) btn.classList.add('active');
+    var fmt='image/jpeg', q=85, resize='0', maxKb='0';
+    if(name==='gov'){ fmt='image/jpeg'; q=92; resize='1920'; }
+    if(name==='mail'){ fmt='image/jpeg'; q=82; resize='1280'; maxKb='2048'; }
+    if(name==='sns'){ fmt='image/webp'; q=82; resize='1280'; }
+    if(name==='orig'){ fmt='image/jpeg'; q=90; resize='0'; }
+    document.querySelectorAll('#formatSeg button').forEach(function(x){ x.classList.toggle('active',x.dataset.fmt===fmt); });
+    qEl.value=q; document.getElementById('qLabel').textContent=q+'%';
+    document.getElementById('resizeSel').value=resize; document.getElementById('maxKb').value=maxKb;
+    scheduleProcess();
+    var nameKey='preset'+name.charAt(0).toUpperCase()+name.slice(1);
+    toast(t.toastPreset(t[nameKey]||name));
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  document.getElementById('presets').addEventListener('click',function(e){ var b=e.target.closest('button'); if(b) applyPreset(b.dataset.preset); });
+  document.querySelectorAll('[data-apply]').forEach(function(b){ b.addEventListener('click',function(){ applyPreset(b.dataset.apply); }); });
+})();
+</script>
+</body>
+</html>
